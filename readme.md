@@ -96,3 +96,7 @@ CREATE TABLE IF NOT EXISTS todos (
 4. `main` ブランチへpushすると自動デプロイされます。CLIで公開する場合は `npx wrangler pages deploy public` を実行します。
 
 型チェックは `npm run typecheck` で実行できます。
+
+git remote add origin https://github.com/sickboy0001/cf-todo-test.git
+
+sickboy0001/cf-todo-test.git

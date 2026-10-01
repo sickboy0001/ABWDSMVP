@@ -84,7 +84,7 @@ function Layout({ children }: { children: any }) {
           </header>
           <main>{children}</main>
           <footer class="footer">
-            <span>ひとつずつ、片づける。</span>
+            <span>ひとつずつ、片づける。テスト</span>
             <span>DAILY LEDGER · TO-DO</span>
           </footer>
         </div>
