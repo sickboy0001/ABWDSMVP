@@ -169,7 +169,7 @@ app.get("/", async (c) => {
     <Layout>
       <section class="intro">
         <p class="eyebrow">DAILY LEDGER / TODAY</p>
-        <h1>今日のタスク テスト</h1>
+        <h1>今日のタスク テスト０４２６</h1>
       </section>
       <section class="task-board" aria-label="ToDoリスト">
         <form
