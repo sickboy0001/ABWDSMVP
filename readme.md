@@ -3,7 +3,7 @@
 ## 1. システム概要 (Overview)
 本プロジェクトでは、軽量・高速なWebサービス環境である **Cloudflare** 上で動作するToDo管理ツールを開発します。
 バックエンドに **Hono (TypeScript)**、フロントエンドに **htmx** を採用し、SPA（Single Page Application）のようなスムーズな動的UIを、ビルドサイズを極小に抑えた **サーバーサイドレンダリング（SSR）＋ HTML断片（HTML Partials）** の仕組みで実現します。
-ソースコードは **GitHub** で管理し、**Cloudflare Pages** への自動デプロイ（CI/CD）パイプラインを構築します。
+ソースコードは **GitHub** で管理し、**Cloudflare Workers** への自動デプロイ（CI/CD）パイプラインを構築します。
 
 ---
 
@@ -14,9 +14,9 @@
 | **Web Application Framework** | **Hono (TypeScript)** | エッジコンピューティング環境に最適化された超軽量フレームワーク |
 | **Frontend / UI Layer** | **htmx** + **JSX** | クライアント側JS記述を極小化し、HTMLの拡張属性（`hx-*`）で非同期DOM更新を実現 |
 | **Database / Storage** | **Turso** | TursoのサーバーレスSQLite型データベース（完全分散型・低遅延） ORMは利用しない。|
-| **Hosting Platform** | **Cloudflare Pages** | エッジネットワークでのWebアプリケーション実行環境 |
-| **Version Control & CI/CD** | **GitHub** + **Pages Integration** | `main` ブランチへのPushによる自動ビルド＆デプロイ |
-| **Developer Tools** | **Wrangler + Turso CLI** | Pagesローカル実行およびTursoデータベースの管理 |
+| **Hosting Platform** | **Cloudflare Workers** | エッジネットワークでのWebアプリケーション実行環境 |
+| **Version Control & CI/CD** | **GitHub** + **Workers Builds** | `main` ブランチへのPushによる自動ビルド＆デプロイ |
+| **Developer Tools** | **Wrangler + Turso CLI** | Workersローカル実行およびTursoデータベースの管理 |
 
 ---
 
@@ -64,7 +64,7 @@ CREATE TABLE IF NOT EXISTS todos (
 ### 5.1 必要なもの
 - Node.js 20以降
 - TursoアカウントとTurso CLI
-- Cloudflareアカウント（Pagesへのデプロイ時）
+- Cloudflareアカウント（Workersへのデプロイ時）
 
 ### 5.2 ローカル起動
 1. 依存パッケージをインストールします。
@@ -87,16 +87,12 @@ CREATE TABLE IF NOT EXISTS todos (
    npm run db:migrate
    npm run dev
    ```
-6. ブラウザーで `http://localhost:8788` を開きます。
+6. ブラウザーで `http://localhost:8787` を開きます。
 
-### 5.3 Cloudflare Pagesへの公開
-1. GitHubリポジトリをCloudflare Pagesに接続し、Production branchを `main` に設定します。
-2. Pagesの環境変数に `TURSO_DATABASE_URL` と `TURSO_AUTH_TOKEN` を登録します。認証トークンはSecretとして登録してください。
-3. Build commandは不要です。Build output directoryは `public` に設定します。`functions/` はPages Functionsとして自動認識されます。
-4. `main` ブランチへpushすると自動デプロイされます。CLIで公開する場合は `npx wrangler pages deploy public` を実行します。
+### 5.3 Cloudflare Workersへの公開
+1. Cloudflare DashboardのWorkers & PagesからWorkerをGitHubリポジトリに接続し、Production branchを `main` に設定します。Workers BuildsのDeploy commandには `npm run deploy` を設定します。
+2. WorkerのVariables and Secretsに `TURSO_DATABASE_URL` と `TURSO_AUTH_TOKEN` を登録します。認証トークンはSecretとして登録してください。
+3. `wrangler.toml` の `[assets]` 設定により `public/` の静的ファイルをWorkerから配信します。追加のビルド出力ディレクトリ設定は不要です。
+4. `main` ブランチへpushするとWorkers Buildsがデプロイします。CLIで公開する場合は `npm run deploy` を実行します。
 
 型チェックは `npm run typecheck` で実行できます。
-
-git remote add origin https://github.com/sickboy0001/cf-todo-test.git
-
-sickboy0001/cf-todo-test.git
