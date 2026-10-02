@@ -81,17 +81,19 @@ CREATE TABLE IF NOT EXISTS todos (
    turso db show todo-db --url
    turso db tokens create todo-db
    ```
-4. `.dev.vars.example` を `.dev.vars` にコピーし、`TURSO_DATABASE_URL` と `TURSO_AUTH_TOKEN` を取得した値で設定します。
-5. テーブルを作成して開発サーバーを起動します。
+4. `.dev.vars.example` を `.dev.vars` にコピーし、Turso接続値とGoogle OAuthの値を設定します。`APP_BASE_URL` はローカルでは `http://localhost:8787` にします。
+5. テーブルを作成し、認証用スキーマを追加して開発サーバーを起動します。
    ```sh
    npm run db:migrate
+   npm run db:migrate:auth
    npm run dev
    ```
+   `db:migrate:auth` は既存のTursoデータベースに対して一度だけ実行します。既存データのToDoは所有者なし（`NULL`）のまま保持されます。
 6. ブラウザーで `http://localhost:8787` を開きます。
 
 ### 5.3 Cloudflare Workersへの公開
 1. Cloudflare DashboardのWorkers & PagesからWorkerをGitHubリポジトリに接続し、Production branchを `main` に設定します。Workers BuildsのDeploy commandには `npm run deploy` を設定します。
-2. WorkerのVariables and Secretsに `TURSO_DATABASE_URL` と `TURSO_AUTH_TOKEN` を登録します。認証トークンはSecretとして登録してください。
+2. WorkerのVariables and Secretsに `TURSO_DATABASE_URL`、`TURSO_AUTH_TOKEN`、`GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET`、`AUTH_SECRET`、`APP_BASE_URL` を登録します。秘密値はSecretとして登録してください。`APP_BASE_URL` は本番Workerのオリジンにし、Google Cloud Consoleにも `/api/auth/callback/google` を登録します。
 3. `wrangler.toml` の `[assets]` 設定により `public/` の静的ファイルをWorkerから配信します。追加のビルド出力ディレクトリ設定は不要です。
 4. `main` ブランチへpushするとWorkers Buildsがデプロイします。CLIで公開する場合は `npm run deploy` を実行します。
 

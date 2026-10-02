@@ -72,6 +72,103 @@ button { color: inherit; }
   letter-spacing: 0;
 }
 
+.account-area, .account-user, .google-login {
+  display: inline-flex;
+  align-items: center;
+}
+
+.account-area { gap: 14px; }
+.account-user { gap: 8px; color: #596259; font-size: 12px; }
+.account-user img, .account-avatar-fallback, .todo-owner img, .owner-avatar-fallback {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.account-avatar-fallback, .owner-avatar-fallback {
+  display: grid;
+  place-items: center;
+  background: #e7eee7;
+  color: var(--green-dark);
+  font-size: 11px;
+  font-weight: 600;
+}
+.google-login {
+  min-height: 36px;
+  gap: 8px;
+  padding: 0 11px;
+  border: 1px solid #dfe4dc;
+  border-radius: 6px;
+  background: white;
+  color: #39433b;
+  font-size: 12px;
+  text-decoration: none;
+}
+.google-login:hover { background: #f8faf7; border-color: #cbd5cb; }
+.google-g { color: #4285f4; font-size: 16px; font-weight: 700; }
+.account-action {
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #737b73;
+  font-size: 11px;
+  cursor: pointer;
+}
+.account-action:hover { background: #eef2ed; color: var(--ink); }
+.auth-error {
+  margin: 18px 0 -26px;
+  color: #a14d43;
+  font-size: 13px;
+}
+
+.login-page {
+  width: min(100%, 440px);
+  margin: 58px auto 72px;
+  animation: arrive 500ms ease both;
+}
+.login-intro { padding: 0 0 22px; }
+.login-intro .eyebrow { margin-bottom: 12px; }
+.login-panel {
+  padding: 24px;
+  border: 1px solid #e3e7de;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 94%);
+  box-shadow: 0 12px 36px rgb(35 50 37 / 5%);
+}
+.login-fields { display: grid; gap: 9px; }
+.login-fields label { margin-top: 3px; color: #515b52; font-size: 12px; font-weight: 600; }
+.login-fields input {
+  width: 100%;
+  height: 44px;
+  padding: 0 12px;
+  border: 1px solid #dfe4dc;
+  border-radius: 6px;
+  outline: none;
+  background: #fbfcfa;
+  color: var(--ink);
+  font-size: 14px;
+}
+.login-fields input:focus { border-color: #72927c; box-shadow: 0 0 0 3px #315e4917; }
+.email-login-submit {
+  min-height: 43px;
+  margin-top: 6px;
+  border: 0;
+  border-radius: 6px;
+  background: #e8ebe6;
+  color: #899087;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: not-allowed;
+}
+.login-divider { display: flex; align-items: center; gap: 12px; margin: 21px 0; color: #8b9289; font-size: 11px; }
+.login-divider::before, .login-divider::after { height: 1px; flex: 1; background: var(--line); content: ''; }
+.google-login-primary { width: 100%; min-height: 46px; justify-content: center; font-size: 13px; font-weight: 600; }
+.google-login-primary .google-g { font-size: 18px; }
+.login-back { display: block; margin-top: 18px; color: #727b72; font-size: 12px; text-align: center; text-decoration: none; }
+.login-back:hover { color: var(--green-dark); }
+
 main { flex: 1; }
 
 .intro {
@@ -195,6 +292,9 @@ h1 {
 
 .todo-title { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 14px; line-height: 1.6; }
 .is-complete .todo-title { color: #969d95; text-decoration: line-through; text-decoration-color: #aeb6ac; }
+.todo-owner { max-width: 150px; display: inline-flex; align-items: center; gap: 6px; color: #788078; font-size: 10px; white-space: nowrap; }
+.todo-owner span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.todo-owner img, .owner-avatar-fallback { width: 22px; height: 22px; flex-basis: 22px; }
 
 .delete-button {
   padding: 7px 8px;
@@ -227,11 +327,19 @@ h1 {
   .page-shell { width: min(100% - 32px, 920px); }
   .topbar { height: 64px; }
   .topbar-note { font-size: 9px; }
+  .account-area { gap: 5px; }
+  .account-user { gap: 5px; font-size: 10px; }
+  .google-login { min-height: 32px; gap: 5px; padding: 0 7px; font-size: 10px; }
+  .account-action { padding: 6px 4px; font-size: 10px; }
   .intro { padding: 38px 0 18px; }
+  .login-page { margin: 38px auto 48px; }
+  .login-panel { padding: 19px 16px; }
   h1 { font-size: 25px; }
   .task-board { padding: 15px 14px 12px; }
   .filters { gap: 1px; }
   .filter-button { padding: 0 9px; }
+  .todo-item { gap: 8px; }
+  .todo-owner { max-width: 90px; gap: 4px; }
   .footer { margin-top: 36px; }
 }
 

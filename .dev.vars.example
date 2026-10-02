@@ -1,2 +1,6 @@
 TURSO_DATABASE_URL=libsql://your-database-your-org.turso.io
 TURSO_AUTH_TOKEN=your-auth-token
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+AUTH_SECRET=replace-with-at-least-32-random-characters
+APP_BASE_URL=http://localhost:8787
