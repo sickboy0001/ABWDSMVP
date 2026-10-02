@@ -394,10 +394,7 @@ function Layout({
                   </form>
                 </>
               ) : !loginPage ? (
-                <a
-                  class="google-login"
-                  href="/login"
-                >
+                <a class="google-login" href="/login">
                   ログイン
                 </a>
               ) : null}
@@ -523,11 +520,7 @@ function TodoCollection({
 app.get("/login", (c) => {
   if (c.get("user")) return c.redirect("/", 302);
   return c.html(
-    <Layout
-      user={null}
-      authFailed={c.req.query("auth") === "failed"}
-      loginPage
-    >
+    <Layout user={null} authFailed={c.req.query("auth") === "failed"} loginPage>
       <section class="login-page">
         <div class="login-intro">
           <p class="eyebrow">DAILY LEDGER / ACCOUNT</p>
@@ -555,7 +548,9 @@ app.get("/login", (c) => {
               メールアドレスでログイン
             </button>
           </div>
-          <div class="login-divider"><span>または</span></div>
+          <div class="login-divider">
+            <span>または</span>
+          </div>
           <a
             class="google-login google-login-primary"
             href="/api/auth/login/google?callbackUrl=%2F"
@@ -566,7 +561,9 @@ app.get("/login", (c) => {
             Googleでログイン
           </a>
         </section>
-        <a class="login-back" href="/">ToDoに戻る</a>
+        <a class="login-back" href="/">
+          ToDoに戻る
+        </a>
       </section>
     </Layout>,
   );
