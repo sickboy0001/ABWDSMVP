@@ -227,3 +227,7 @@ Cloudflare Dashboard > Workers & Pages > 対象Worker > Settings > Variables and
 - `GOOGLE_CLIENT_SECRET` (Secret)
 - `AUTH_SECRET` (Secret)
 - `APP_BASE_URL` (Variable: `https://<Workerドメイン>`)
+
+
+### hitory
+2026/10/04 initial deploy
