@@ -1,4 +1,4 @@
-# ABWDS (Agent-Based Wealth Dynamics Simulator) MVP
+# ABWDS (Agent-Based Wealth Dynamics Simulator) [MVP](https://abwdsmvp.syunjyu0001.workers.dev/)
 
 要求仕様書（`docs/01_Requirements.md`）に基づき構築された、マルチエージェント型・富の動態シミュレーションWebアプリケーションのMVP（Minimum Viable Product）です。
 
@@ -230,4 +230,4 @@ Cloudflare Dashboard > Workers & Pages > 対象Worker > Settings > Variables and
 
 
 ### hitory
-2026/10/04 initial deploy
+2026/10/04 initial deploy　https://abwdsmvp.syunjyu0001.workers.dev/
