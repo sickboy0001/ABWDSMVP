@@ -1,14 +1,13 @@
 {
-  "name": "todo-test1",
+  "name": "abwds",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "db:create": "turso db create todo-db",
-    "db:migrate": "turso db shell todo-db < migrations/0001_create_todos.sql",
-    "db:migrate:auth": "turso db shell todo-db < migrations/0002_add_google_auth.sql"
+    "db:migrate": "node scripts/migrate.mjs",
+    "test:engine": "node scripts/test-engine.mjs"
   },
   "dependencies": {
     "@libsql/client": "^0.15.15",
@@ -21,3 +20,4 @@
     "wrangler": "^4.7.0"
   }
 }
+

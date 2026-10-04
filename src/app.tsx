@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
-import { createClient, type Client, type Row } from "@libsql/client/web";
+import { createClient, type Client } from "@libsql/client/web";
 import {
   createPkceChallenge,
   createSessionToken,
@@ -10,6 +10,23 @@ import {
   type AuthUser,
   type GoogleProfile,
 } from "./auth";
+import {
+  getScenarios,
+  getScenario,
+  createScenario,
+  updateScenario,
+  getRecentRuns,
+  getRun,
+  getTurnLogs,
+  getEventLogs,
+} from "./db";
+import type { ScenarioConfig, RunSummary, TurnLog, EventLog } from "./types";
+import { Layout } from "./views/layout";
+import { ScenarioListView } from "./views/scenario_list";
+import { SimulatorView } from "./views/simulator_view";
+import { ScenarioFormView } from "./views/scenario_form";
+import { RunsListView } from "./views/runs_list";
+import { RunReportView } from "./views/run_report";
 
 type Bindings = {
   TURSO_DATABASE_URL: string;
@@ -20,73 +37,10 @@ type Bindings = {
   APP_BASE_URL: string;
 };
 
-type Todo = {
-  id: string;
-  title: string;
-  completed: number;
-  created_at: string;
-  owner_user_id: string | null;
-  owner_name: string | null;
-  owner_image_url: string | null;
-};
-
-type Filter = "all" | "active" | "completed";
-
 export const app = new Hono<{
   Bindings: Bindings;
   Variables: { db: Client; user: AuthUser | null };
 }>();
-
-function mapTodo(row: Row): Todo {
-  return {
-    id: String(row.id),
-    title: String(row.title),
-    completed: Number(row.completed),
-    created_at: String(row.created_at),
-    owner_user_id:
-      row.owner_user_id === null || row.owner_user_id === undefined
-        ? null
-        : String(row.owner_user_id),
-    owner_name:
-      row.owner_name === null || row.owner_name === undefined
-        ? null
-        : String(row.owner_name),
-    owner_image_url:
-      row.owner_image_url === null || row.owner_image_url === undefined
-        ? null
-        : String(row.owner_image_url),
-  };
-}
-
-async function getTodos(db: Client, filter: Filter): Promise<Todo[]> {
-  const condition =
-    filter === "active"
-      ? "WHERE t.completed = 0"
-      : filter === "completed"
-        ? "WHERE t.completed = 1"
-        : "";
-  const result = await db.execute(
-    `SELECT t.id, t.title, t.completed, t.created_at, t.owner_user_id, u.display_name AS owner_name, u.image_url AS owner_image_url FROM todos t LEFT JOIN users u ON u.id = t.owner_user_id ${condition} ORDER BY t.created_at DESC, t.rowid DESC`,
-  );
-  return result.rows.map(mapTodo);
-}
-
-async function getTodo(db: Client, id: string): Promise<Todo | null> {
-  const result = await db.execute({
-    sql: `SELECT t.id, t.title, t.completed, t.created_at, t.owner_user_id, u.display_name AS owner_name, u.image_url AS owner_image_url FROM todos t LEFT JOIN users u ON u.id = t.owner_user_id WHERE t.id = ?`,
-    args: [id],
-  });
-  return result.rows[0] ? mapTodo(result.rows[0]) : null;
-}
-
-function canManageTodo(todo: Todo, user: AuthUser | null): boolean {
-  return todo.owner_user_id === null || todo.owner_user_id === user?.id;
-}
-
-function parseFilter(value: string | undefined): Filter {
-  if (value === "active" || value === "completed") return value;
-  return "all";
-}
 
 app.use("*", async (c, next) => {
   const db = createClient({
@@ -111,554 +65,374 @@ app.use("*", async (c, next) => {
               id: String(row.id),
               email: String(row.email),
               displayName: String(row.display_name),
-              imageUrl:
-                row.image_url === null || row.image_url === undefined
-                  ? null
-                  : String(row.image_url),
-              isAdmin: Number(row.is_admin) === 1,
+              imageUrl: row.image_url ? String(row.image_url) : null,
+              isAdmin: Boolean(Number(row.is_admin)),
             };
           }
         }
-      } catch {
-        user = null;
-      }
+      } catch {}
     }
     c.set("user", user);
     await next();
   } finally {
-    await db.close();
+    db.close();
   }
 });
 
-const oauthCookieOptions = {
-  httpOnly: true,
-  secure: true,
-  sameSite: "Lax" as const,
-  path: "/",
-};
-
-function clearOAuthCookies(c: Parameters<typeof deleteCookie>[0]) {
-  for (const name of [
-    "__Host-oauth-state",
-    "__Host-oauth-nonce",
-    "__Host-oauth-verifier",
-    "__Host-oauth-return",
-  ]) {
-    deleteCookie(c, name, oauthCookieOptions);
-  }
-}
-
-function safeReturnPath(value: string | undefined, origin: string): string {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/";
-  try {
-    const target = new URL(value, origin);
-    return target.origin === origin
-      ? `${target.pathname}${target.search}${target.hash}`
-      : "/";
-  } catch {
-    return "/";
-  }
-}
-
-function sameOriginRequest(request: Request): boolean {
-  const origin = request.headers.get("Origin");
-  return origin !== null && origin === new URL(request.url).origin;
-}
+// 認証関連ルート
+app.get("/login", (c) => {
+  return c.html(
+    <Layout user={c.get("user")} activeNav="login">
+      <div style="max-width: 440px; margin: 40px auto; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 32px; text-align: center; box-shadow: var(--shadow-md);">
+        <h1 style="font-size: 1.4rem; font-weight: 700; margin-bottom: 8px;">ABWDS ログイン</h1>
+        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 24px;">
+          Googleアカウントでログインすると、シナリオの作成者記録や個別履歴が保持されます。
+        </p>
+        <a href="/api/auth/login/google" class="btn btn-primary" style="width: 100%; padding: 12px; font-size: 1rem;">
+          Googleでログイン
+        </a>
+        <div style="margin-top: 20px;">
+          <a href="/" style="font-size: 0.85rem; color: var(--text-dim);">ログインせずに利用する →</a>
+        </div>
+      </div>
+    </Layout>
+  );
+});
 
 app.get("/api/auth/login/google", async (c) => {
-  const { GOOGLE_CLIENT_ID, AUTH_SECRET, APP_BASE_URL } = c.env;
-  if (
-    !GOOGLE_CLIENT_ID ||
-    !AUTH_SECRET ||
-    AUTH_SECRET.length < 32 ||
-    !APP_BASE_URL
-  )
-    return c.text("Google OAuth is not configured.", 503);
-
-  const baseUrl = new URL(APP_BASE_URL);
-  const redirectUri = new URL("/api/auth/callback/google", baseUrl).toString();
-  const state = randomToken();
-  const nonce = randomToken();
   const verifier = randomToken(48);
-  const challenge = await createPkceChallenge(verifier);
-  const returnPath = safeReturnPath(c.req.query("callbackUrl"), baseUrl.origin);
+  const codeChallenge = await createPkceChallenge(verifier);
+  const state = randomToken(32);
+  const nonce = randomToken(32);
+  setCookie(c, "g_state", state, { httpOnly: true, secure: true, sameSite: "Lax", maxAge: 600, path: "/" });
+  setCookie(c, "g_verifier", verifier, { httpOnly: true, secure: true, sameSite: "Lax", maxAge: 600, path: "/" });
+  setCookie(c, "g_nonce", nonce, { httpOnly: true, secure: true, sameSite: "Lax", maxAge: 600, path: "/" });
 
-  for (const [name, value] of [
-    ["__Host-oauth-state", state],
-    ["__Host-oauth-nonce", nonce],
-    ["__Host-oauth-verifier", verifier],
-    ["__Host-oauth-return", returnPath],
-  ]) {
-    setCookie(c, name, value, { ...oauthCookieOptions, maxAge: 600 });
-  }
-
-  const authorizationUrl = new URL(
-    "https://accounts.google.com/o/oauth2/v2/auth",
-  );
-  authorizationUrl.search = new URLSearchParams({
-    client_id: GOOGLE_CLIENT_ID,
-    redirect_uri: redirectUri,
-    response_type: "code",
-    scope: "openid email profile",
-    state,
-    nonce,
-    code_challenge: challenge,
-    code_challenge_method: "S256",
-    prompt: "select_account",
-  }).toString();
-
-  return c.redirect(authorizationUrl.toString(), 302);
+  const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+  url.searchParams.set("client_id", c.env.GOOGLE_CLIENT_ID);
+  url.searchParams.set("redirect_uri", c.env.APP_BASE_URL + "/api/auth/callback/google");
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("scope", "openid email profile");
+  url.searchParams.set("state", state);
+  url.searchParams.set("nonce", nonce);
+  url.searchParams.set("code_challenge", codeChallenge);
+  url.searchParams.set("code_challenge_method", "S256");
+  return c.redirect(url.toString(), 302);
 });
 
 app.get("/api/auth/callback/google", async (c) => {
-  const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, AUTH_SECRET, APP_BASE_URL } =
-    c.env;
-  const state = getCookie(c, "__Host-oauth-state");
-  const nonce = getCookie(c, "__Host-oauth-nonce");
-  const verifier = getCookie(c, "__Host-oauth-verifier");
-  const returnPath = safeReturnPath(
-    getCookie(c, "__Host-oauth-return"),
-    APP_BASE_URL || new URL(c.req.url).origin,
-  );
   const code = c.req.query("code");
+  const state = c.req.query("state");
+  const cookieState = getCookie(c, "g_state");
+  const verifier = getCookie(c, "g_verifier");
+  const nonce = getCookie(c, "g_nonce");
+  deleteCookie(c, "g_state", { path: "/" });
+  deleteCookie(c, "g_verifier", { path: "/" });
+  deleteCookie(c, "g_nonce", { path: "/" });
 
-  if (
-    !GOOGLE_CLIENT_ID ||
-    !GOOGLE_CLIENT_SECRET ||
-    !AUTH_SECRET ||
-    AUTH_SECRET.length < 32 ||
-    !APP_BASE_URL
-  ) {
-    clearOAuthCookies(c);
-    return c.text("Google OAuth is not configured.", 503);
+  if (!code || !state || !cookieState || state !== cookieState || !verifier || !nonce) {
+    return c.redirect("/login?error=invalid_state");
   }
 
-  if (
-    c.req.query("error") ||
-    !code ||
-    !state ||
-    state !== c.req.query("state") ||
-    !nonce ||
-    !verifier
-  ) {
-    clearOAuthCookies(c);
-    return c.redirect("/login?auth=failed", 303);
-  }
-
-  try {
-    const redirectUri = new URL(
-      "/api/auth/callback/google",
-      APP_BASE_URL,
-    ).toString();
-    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        code,
-        client_id: GOOGLE_CLIENT_ID,
-        client_secret: GOOGLE_CLIENT_SECRET,
-        redirect_uri: redirectUri,
-        grant_type: "authorization_code",
-        code_verifier: verifier,
-      }),
-    });
-    if (!tokenResponse.ok) throw new Error("Google token exchange failed");
-    const tokens = (await tokenResponse.json()) as { id_token?: string };
-    if (!tokens.id_token) throw new Error("Google ID token is missing");
-
-    const profile = await verifyGoogleIdToken(
-      tokens.id_token,
-      GOOGLE_CLIENT_ID,
-      nonce,
-    );
-    const db = c.get("db");
-    await db.execute({
-      sql: `INSERT INTO users (id, email, display_name, image_url, google_id, email_verified)
-            VALUES (?, ?, ?, ?, ?, 1)
-            ON CONFLICT(google_id) DO UPDATE SET
-              email = excluded.email,
-              display_name = excluded.display_name,
-              image_url = excluded.image_url,
-              email_verified = 1,
-              updated_at = CURRENT_TIMESTAMP`,
-      args: [
-        crypto.randomUUID(),
-        profile.email,
-        profile.displayName,
-        profile.imageUrl,
-        profile.googleId,
-      ],
-    });
-    const userResult = await db.execute({
-      sql: "SELECT id, email, display_name, image_url, is_admin FROM users WHERE google_id = ?",
-      args: [profile.googleId],
-    });
-    const row = userResult.rows[0];
-    if (!row) throw new Error("User could not be loaded");
-
-    const user: AuthUser = {
-      id: String(row.id),
-      email: String(row.email),
-      displayName: String(row.display_name),
-      imageUrl:
-        row.image_url === null || row.image_url === undefined
-          ? null
-          : String(row.image_url),
-      isAdmin: Number(row.is_admin) === 1,
-    };
-    const session = await createSessionToken(AUTH_SECRET, user);
-    clearOAuthCookies(c);
-    setCookie(c, "__Host-session", session, {
-      ...oauthCookieOptions,
-      maxAge: 60 * 60 * 24,
-    });
-    return c.redirect(returnPath, 303);
-  } catch {
-    clearOAuthCookies(c);
-    return c.redirect("/login?auth=failed", 303);
-  }
-});
-
-app.get("/api/auth/session", (c) => {
-  const user = c.get("user");
-  return c.json({
-    user: user
-      ? {
-          id: user.id,
-          email: user.email,
-          name: user.displayName,
-          image: user.imageUrl,
-          isAdmin: user.isAdmin,
-        }
-      : null,
+  const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      code,
+      client_id: c.env.GOOGLE_CLIENT_ID,
+      client_secret: c.env.GOOGLE_CLIENT_SECRET,
+      redirect_uri: c.env.APP_BASE_URL + "/api/auth/callback/google",
+      grant_type: "authorization_code",
+      code_verifier: verifier,
+    }),
   });
+  if (!tokenRes.ok) return c.redirect("/login?error=token_failed");
+  const tokenData = await tokenRes.json<{ id_token: string }>();
+
+  let profile: GoogleProfile;
+  try {
+    profile = await verifyGoogleIdToken(tokenData.id_token, c.env.GOOGLE_CLIENT_ID, nonce);
+  } catch {
+    return c.redirect("/login?error=verify_failed");
+  }
+
+  const db = c.get("db");
+  const userRes = await db.execute({
+    sql: "SELECT id, email, display_name, image_url, is_admin FROM users WHERE google_id = ?",
+    args: [profile.googleId],
+  });
+  let authUser: AuthUser;
+  const user = userRes.rows[0];
+  if (!user) {
+    const userId = crypto.randomUUID();
+    await db.execute({
+      sql: "INSERT INTO users (id, email, display_name, image_url, google_id) VALUES (?, ?, ?, ?, ?)",
+      args: [userId, profile.email, profile.displayName, profile.imageUrl, profile.googleId],
+    });
+    authUser = {
+      id: userId,
+      email: profile.email,
+      displayName: profile.displayName,
+      imageUrl: profile.imageUrl,
+      isAdmin: false,
+    };
+  } else {
+    authUser = {
+      id: String(user.id),
+      email: String(user.email),
+      displayName: String(user.display_name),
+      imageUrl: user.image_url ? String(user.image_url) : null,
+      isAdmin: Boolean(Number(user.is_admin)),
+    };
+  }
+
+  const sessionToken = await createSessionToken(c.env.AUTH_SECRET, authUser);
+  setCookie(c, "__Host-session", sessionToken, { httpOnly: true, secure: true, sameSite: "Lax", maxAge: 86400, path: "/" });
+  return c.redirect("/");
 });
 
 app.post("/api/auth/logout", (c) => {
-  if (!sameOriginRequest(c.req.raw)) return c.text("Forbidden", 403);
-  deleteCookie(c, "__Host-session", oauthCookieOptions);
-  return c.redirect("/", 303);
+  deleteCookie(c, "__Host-session", { path: "/" });
+  return c.redirect("/");
 });
-
-function Layout({
-  children,
-  user,
-  authFailed = false,
-  loginPage = false,
-}: {
-  children: any;
-  user: AuthUser | null;
-  authFailed?: boolean;
-  loginPage?: boolean;
-}) {
-  return (
-    <html lang="ja">
-      <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="theme-color" content="#f4f5f0" />
-        <title>ToDo | Daily Ledger</title>
-        <link rel="stylesheet" href="/style.css" />
-        <script src="https://unpkg.com/htmx.org@2.0.4"></script>
-      </head>
-      <body>
-        <div class="page-shell">
-          <header class="topbar">
-            <a class="wordmark" href="/" aria-label="Daily Ledger ホーム">
-              <span class="mark" aria-hidden="true">
-                D
-              </span>
-              <span>daily ledger</span>
-            </a>
-            <div class="account-area">
-              {user ? (
-                <>
-                  <span class="account-user">
-                    {user.imageUrl ? (
-                      <img
-                        src={user.imageUrl}
-                        alt=""
-                        referrerpolicy="no-referrer"
-                      />
-                    ) : (
-                      <span class="account-avatar-fallback">
-                        {user.displayName.slice(0, 1)}
-                      </span>
-                    )}
-                    <span>{user.displayName}</span>
-                  </span>
-                  <form method="post" action="/api/auth/logout">
-                    <button class="account-action" type="submit">
-                      ログアウト
-                    </button>
-                  </form>
-                </>
-              ) : !loginPage ? (
-                <a class="google-login" href="/login">
-                  ログイン
-                </a>
-              ) : null}
-            </div>
-          </header>
-          <main>
-            {authFailed && (
-              <p class="auth-error" role="alert">
-                ログインに失敗しました。設定を確認して、もう一度お試しください。
-              </p>
-            )}
-            {children}
-          </main>
-          <footer class="footer">
-            <span>ひとつずつ、片づける。テスト</span>
-            <span>DAILY LEDGER · TO-DO</span>
-          </footer>
-        </div>
-      </body>
-    </html>
-  );
-}
-
-function TodoItem({ todo, user }: { todo: Todo; user: AuthUser | null }) {
-  const completed = Boolean(todo.completed);
-  const canManage = canManageTodo(todo, user);
-  return (
-    <li
-      class={`todo-item${completed ? " is-complete" : ""}`}
-      id={`todo-${todo.id}`}
-    >
-      {canManage && (
-        <label class="todo-check">
-          <input
-            type="checkbox"
-            checked={completed}
-            aria-label={`${todo.title}を${completed ? "未完了に戻す" : "完了にする"}`}
-            hx-patch={`/todos/${todo.id}/toggle`}
-            hx-target="closest li"
-            hx-swap="outerHTML"
-          />
-          <span class="checkmark" aria-hidden="true"></span>
-        </label>
-      )}
-      <span class="todo-title">{todo.title}</span>
-      {todo.owner_user_id && todo.owner_name && (
-        <span class="todo-owner" title={`所有者: ${todo.owner_name}`}>
-          {todo.owner_image_url ? (
-            <img
-              src={todo.owner_image_url}
-              alt=""
-              referrerpolicy="no-referrer"
-            />
-          ) : (
-            <span class="owner-avatar-fallback">
-              {todo.owner_name.slice(0, 1)}
-            </span>
-          )}
-          <span>{todo.owner_name}</span>
-        </span>
-      )}
-      {canManage && (
-        <button
-          class="delete-button"
-          type="button"
-          aria-label={`${todo.title}を削除`}
-          hx-delete={`/todos/${todo.id}`}
-          hx-target="closest li"
-          hx-swap="outerHTML"
-          hx-confirm="このタスクを削除しますか？"
-        >
-          削除
-        </button>
-      )}
-    </li>
-  );
-}
-
-function TodoCollection({
-  todos,
-  filter,
-  user,
-}: {
-  todos: Todo[];
-  filter: Filter;
-  user: AuthUser | null;
-}) {
-  const filters: { key: Filter; label: string }[] = [
-    { key: "all", label: "すべて" },
-    { key: "active", label: "未完了" },
-    { key: "completed", label: "完了済み" },
-  ];
-
-  return (
-    <section class="todo-content" id="todo-content" aria-live="polite">
-      <nav class="filters" aria-label="タスクの絞り込み">
-        {filters.map(({ key, label }) => (
-          <button
-            type="button"
-            class={`filter-button${filter === key ? " is-current" : ""}`}
-            aria-pressed={filter === key}
-            hx-get={`/todos?filter=${key}`}
-            hx-target="#todo-content"
-            hx-swap="outerHTML"
-          >
-            {label}
-          </button>
-        ))}
-      </nav>
-      <ul
-        class="todo-list"
-        id="todo-list"
-        data-empty="ここはすっきり。タスクを追加しましょう。"
-      >
-        {todos.map((todo) => (
-          <TodoItem todo={todo} user={user} />
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-app.get("/login", (c) => {
-  if (c.get("user")) return c.redirect("/", 302);
-  return c.html(
-    <Layout user={null} authFailed={c.req.query("auth") === "failed"} loginPage>
-      <section class="login-page">
-        <div class="login-intro">
-          <p class="eyebrow">DAILY LEDGER / ACCOUNT</p>
-          <h1>ログイン</h1>
-        </div>
-        <section class="login-panel" aria-label="ログイン">
-          <div class="login-fields">
-            <label for="login-email">メールアドレス</label>
-            <input
-              id="login-email"
-              name="email"
-              type="email"
-              autocomplete="email"
-              placeholder="name@example.com"
-            />
-            <label for="login-password">パスワード</label>
-            <input
-              id="login-password"
-              name="password"
-              type="password"
-              autocomplete="current-password"
-              placeholder="パスワード"
-            />
-            <button class="email-login-submit" type="button" disabled>
-              メールアドレスでログイン
-            </button>
-          </div>
-          <div class="login-divider">
-            <span>または</span>
-          </div>
-          <a
-            class="google-login google-login-primary"
-            href="/api/auth/login/google?callbackUrl=%2F"
-          >
-            <span class="google-g" aria-hidden="true">
-              G
-            </span>
-            Googleでログイン
-          </a>
-        </section>
-        <a class="login-back" href="/">
-          ToDoに戻る
-        </a>
-      </section>
-    </Layout>,
-  );
-});
-
+// 画面ルート
 app.get("/", async (c) => {
-  const todos = await getTodos(c.get("db"), "all");
+  const db = c.get("db");
+  const scenarios = await getScenarios(db);
+  const recentRuns = await getRecentRuns(db, 5);
   return c.html(
-    <Layout user={c.get("user")} authFailed={c.req.query("auth") === "failed"}>
-      <section class="intro">
-        <p class="eyebrow">DAILY LEDGER / TODAY</p>
-        <h1>今日のタスク テスト０４２６</h1>
-      </section>
-      <section class="task-board" aria-label="ToDoリスト">
-        <form
-          class="todo-form"
-          hx-post="/todos"
-          hx-target="#todo-list"
-          hx-swap="beforeend"
-          hx-on--after-request="if (event.detail.successful) this.reset()"
-        >
-          <label class="visually-hidden" for="todo-title">
-            新しいタスク
-          </label>
-          <input
-            id="todo-title"
-            name="title"
-            type="text"
-            maxlength={160}
-            placeholder="次にやることは？"
-            autocomplete="off"
-            required
-          />
-          <button class="add-button" type="submit">
-            <span aria-hidden="true">+</span> 追加
-          </button>
-        </form>
-        <TodoCollection todos={todos} filter="all" user={c.get("user")} />
-      </section>
-    </Layout>,
+    <Layout user={c.get("user")} activeNav="scenarios">
+      <ScenarioListView scenarios={scenarios} recentRuns={recentRuns} />
+    </Layout>
   );
 });
 
-app.get("/todos", async (c) => {
-  const filter = parseFilter(c.req.query("filter"));
-  const todos = await getTodos(c.get("db"), filter);
+app.get("/scenarios/new", (c) => {
   return c.html(
-    <TodoCollection todos={todos} filter={filter} user={c.get("user")} />,
+    <Layout user={c.get("user")} activeNav="new" title="新規シナリオ作成">
+      <ScenarioFormView />
+    </Layout>
   );
 });
 
-app.post("/todos", async (c) => {
-  const form = await c.req.parseBody();
-  const title = typeof form.title === "string" ? form.title.trim() : "";
-  if (!title || title.length > 160)
-    return c.body("入力内容を確認してください。", 400);
-
-  const id = crypto.randomUUID();
+app.get("/scenarios/:id/edit", async (c) => {
   const db = c.get("db");
-  if (!sameOriginRequest(c.req.raw)) return c.text("Forbidden", 403);
-  await db.execute({
-    sql: "INSERT INTO todos (id, title, owner_user_id) VALUES (?, ?, ?)",
-    args: [id, title, c.get("user")?.id ?? null],
-  });
-  const todo = await getTodo(db, id);
-  if (!todo) return c.body("タスクを作成できませんでした。", 500);
-  return c.html(<TodoItem todo={todo} user={c.get("user")} />);
+  const scenario = await getScenario(db, c.req.param("id"));
+  if (!scenario) return c.notFound();
+  return c.html(
+    <Layout user={c.get("user")} title={`シナリオ編集: ${scenario.title}`}>
+      <ScenarioFormView scenario={scenario} isEdit={true} />
+    </Layout>
+  );
 });
 
-app.patch("/todos/:id/toggle", async (c) => {
-  if (!sameOriginRequest(c.req.raw)) return c.text("Forbidden", 403);
-  const { id } = c.req.param();
+app.get("/scenarios/:id/run", async (c) => {
   const db = c.get("db");
-  const current = await getTodo(db, id);
-  if (!current) return c.notFound();
-  const user = c.get("user");
-  if (!canManageTodo(current, user)) return c.text("Forbidden", 403);
-  await db.execute({
-    sql: "UPDATE todos SET completed = 1 - completed WHERE id = ?",
-    args: [id],
-  });
-  const todo = await getTodo(db, id);
-  if (!todo) return c.notFound();
-  return c.html(<TodoItem todo={todo} user={user} />);
+  const scenario = await getScenario(db, c.req.param("id"));
+  if (!scenario) return c.notFound();
+
+  const seedQuery = c.req.query("seed");
+  const seed = seedQuery ? Number(seedQuery) : Math.floor(Math.random() * 90000000) + 10000000;
+  const isReplay = c.req.query("replay") === "1";
+
+  return c.html(
+    <Layout user={c.get("user")} title={`施行: ${scenario.title}`}>
+      <SimulatorView scenario={scenario} seed={seed} isReplay={isReplay} />
+    </Layout>
+  );
 });
 
-app.delete("/todos/:id", async (c) => {
-  if (!sameOriginRequest(c.req.raw)) return c.text("Forbidden", 403);
-  const db = c.get("db");
-  const todo = await getTodo(db, c.req.param("id"));
-  if (!todo) return c.notFound();
-  if (!canManageTodo(todo, c.get("user"))) return c.text("Forbidden", 403);
-  await db.execute({
-    sql: "DELETE FROM todos WHERE id = ?",
-    args: [c.req.param("id")],
-  });
-  return c.body(null, 200);
+app.get("/scenarios/:id", (c) => {
+  return c.redirect(`/scenarios/${c.req.param("id")}/run`);
 });
+
+app.get("/runs", async (c) => {
+  const db = c.get("db");
+  const runs = await getRecentRuns(db, 50);
+  return c.html(
+    <Layout user={c.get("user")} activeNav="runs" title="施行履歴一覧">
+      <RunsListView runs={runs} />
+    </Layout>
+  );
+});
+
+app.get("/runs/:id", async (c) => {
+  const db = c.get("db");
+  const runId = c.req.param("id");
+  const run = await getRun(db, runId);
+  if (!run) return c.notFound();
+  const turnLogs = await getTurnLogs(db, runId);
+  const eventLogs = await getEventLogs(db, runId);
+
+  return c.html(
+    <Layout user={c.get("user")} title={`レポート: #${run.id.slice(0, 8)}`}>
+      <RunReportView run={run} turnLogs={turnLogs} eventLogs={eventLogs} />
+    </Layout>
+  );
+});
+// APIルート
+function parseScenarioConfig(body: Record<string, any>): ScenarioConfig {
+  return {
+    agentCount: Number(body.agentCount) || 500,
+    maxTurns: Number(body.maxTurns) || 200,
+    initialWealth: Number(body.initialWealth) || 10000,
+    wealthDistribution: body.wealthDistribution === "unequal" ? "unequal" : "equal",
+    waitRate: Number(body.waitRate) || 0,
+    investorRate: Number(body.investorRate) || 0,
+    investorReturnRate: 5,
+    investorFailRate: 4,
+    learningAgent: body.learningAgent === "1" || body.learningAgent === "true",
+    matchRule: body.matchRule === "community" ? "community" : "random",
+    communityGroups: 4,
+    strongAdvantage: body.strongAdvantage === "1" || body.strongAdvantage === "true",
+    strongAdvantageTopPercent: 10,
+    strongAdvantageBonus: 0.15,
+    betRule: "min_wealth",
+    betRatio: (Number(body.betRatio) || 10) / 100,
+    ubiEnabled: Number(body.ubiAmount) > 0,
+    ubiAmount: Number(body.ubiAmount) || 0,
+    progressiveTaxEnabled: Number(body.progressiveTaxRate) > 0,
+    progressiveTaxThreshold: (Number(body.initialWealth) || 10000) * 2,
+    progressiveTaxRate: (Number(body.progressiveTaxRate) || 0) / 100,
+    reliefEnabled: body.reliefEnabled === "1" || body.reliefEnabled === "true",
+    reliefRate: 0.05,
+    inflationRate: (Number(body.inflationRate) || 0) / 100,
+    bankruptcyThreshold: Number(body.bankruptcyThreshold) || 100,
+  };
+}
+
+app.post("/api/scenarios", async (c) => {
+  const body = await c.req.parseBody();
+  const title = String(body.title || "").trim();
+  if (!title) return c.text("タイトルを入力してください", 400);
+  const description = String(body.description || "").trim();
+  const config = parseScenarioConfig(body);
+  const id = "scen-" + crypto.randomUUID().slice(0, 8);
+
+  const db = c.get("db");
+  await createScenario(db, {
+    id,
+    user_id: c.get("user")?.id ?? null,
+    title,
+    description,
+    config,
+  });
+
+  return c.redirect(`/scenarios/${id}/run`);
+});
+
+app.post("/api/scenarios/:id/update", async (c) => {
+  const id = c.req.param("id");
+  const body = await c.req.parseBody();
+  const title = String(body.title || "").trim();
+  if (!title) return c.text("タイトルを入力してください", 400);
+  const description = String(body.description || "").trim();
+  const config = parseScenarioConfig(body);
+
+  const db = c.get("db");
+  await updateScenario(db, id, { title, description, config });
+  return c.redirect(`/scenarios/${id}/run`);
+});
+
+app.post("/api/scenarios/:id/copy", async (c) => {
+  const db = c.get("db");
+  const original = await getScenario(db, c.req.param("id"));
+  if (!original) return c.notFound();
+
+  const newId = "scen-" + crypto.randomUUID().slice(0, 8);
+  let config: ScenarioConfig = {} as ScenarioConfig;
+  try {
+    config = JSON.parse(original.config_json);
+  } catch (e) {}
+
+  await createScenario(db, {
+    id: newId,
+    user_id: c.get("user")?.id ?? null,
+    title: `${original.title} (コピー)`,
+    description: original.description,
+    config,
+  });
+
+  return c.redirect(`/scenarios/${newId}/edit`);
+});
+app.post("/api/runs", async (c) => {
+  const data = await c.req.json<{
+    scenario_id: string;
+    seed_value: number;
+    status: string;
+    max_turns: number;
+    final_turn: number;
+    summary: RunSummary;
+    turn_logs: TurnLog[];
+    event_logs: EventLog[];
+  }>();
+
+  const runId = crypto.randomUUID();
+  const db = c.get("db");
+
+  await db.execute({
+    sql: `INSERT INTO simulation_runs (id, scenario_id, user_id, seed_value, status, max_turns, final_turn, summary_json, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+    args: [
+      runId,
+      data.scenario_id,
+      c.get("user")?.id ?? null,
+      data.seed_value,
+      data.status || "completed",
+      data.max_turns,
+      data.final_turn,
+      JSON.stringify(data.summary || {}),
+    ],
+  });
+
+  if (data.turn_logs && Array.isArray(data.turn_logs)) {
+    for (const log of data.turn_logs) {
+      await db.execute({
+        sql: `INSERT INTO turn_logs (run_id, turn, gini_index, survivor_count, mean_wealth, median_wealth, top_1_share, top_10_share, bottom_50_share, histogram_json)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+          runId,
+          log.turn,
+          log.gini_index,
+          log.survivor_count,
+          log.mean_wealth,
+          log.median_wealth,
+          log.top_1_share,
+          log.top_10_share,
+          log.bottom_50_share,
+          log.histogram_json || "[]",
+        ],
+      });
+    }
+  }
+
+  if (data.event_logs && Array.isArray(data.event_logs)) {
+    for (const evt of data.event_logs) {
+      await db.execute({
+        sql: `INSERT INTO event_logs (run_id, turn, event_type, message, event_detail_json, created_at)
+              VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+        args: [runId, evt.turn, evt.event_type, evt.message, evt.event_detail_json || null],
+      });
+    }
+  }
+
+  return c.json({ success: true, run_id: runId });
+});
+
+app.get("/api/runs/:id/export.csv", async (c) => {
+  const db = c.get("db");
+  const runId = c.req.param("id");
+  const run = await getRun(db, runId);
+  if (!run) return c.notFound();
+  const logs = await getTurnLogs(db, runId);
+
+  let csv = "Turn,GiniIndex,SurvivorCount,MeanWealth,MedianWealth,Top1Share,Top10Share,Bottom50Share\n";
+  for (const log of logs) {
+    csv += `${log.turn},${log.gini_index},${log.survivor_count},${log.mean_wealth},${log.median_wealth},${log.top_1_share},${log.top_10_share},${log.bottom_50_share}\n`;
+  }
+
+  c.header("Content-Type", "text/csv; charset=utf-8");
+  c.header("Content-Disposition", `attachment; filename="abwds_run_${runId.slice(0, 8)}.csv"`);
+  return c.text(csv);
+});
+

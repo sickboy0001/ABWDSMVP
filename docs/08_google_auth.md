@@ -29,7 +29,7 @@
   - ログインを必須にせず、未ログインでも ToDo 一覧を閲覧できる。
   - 未ログインで作成した ToDo の所有者は `NULL` とする。
 1. **Google でログイン（任意）**:
-  - 画面上に Google ログインへの導線を表示する。メールアドレス/パスワード入力欄は設けない。
+  - `/login` にメールアドレス/パスワード入力欄を表示するが、メール/パスワード認証は未実装とする。Google ログインのみ利用可能とする。
    - OAuth 2.0 認可リクエストが Google へ送信される。
 2. **Google 認証画面**:
    - ユーザーは Google 側でログイン（またはアカウント選択）。
@@ -141,8 +141,9 @@ CREATE INDEX IF NOT EXISTS idx_todos_owner_user_id ON todos(owner_user_id);
 2. **OAuth 同意画面**: Google Auth Platform でアプリ情報と対象ユーザーを設定する。テスト中はテストユーザーを登録する。Google+ API の有効化は不要。
 3. **認証情報作成**:
    - **OAuth クライアント ID**:
-     - 応用タイプ：「Web アプリケーション」。
-    - 許可されたリダイレクト URI: デプロイ先ごとの完全一致 URL を登録する（下記「コールバック URL の設定」参照）。
+     - アプリケーションの種類は「ウェブ アプリケーション」。
+     - 承認済みの JavaScript 生成元は設定しない（このアプリはサーバー側でOAuthを処理する）。
+     - 承認済みのリダイレクト URIには、ローカルの `http://localhost:8787/api/auth/callback/google` と、本番Workerの `https://<本番Workerのホスト名>/api/auth/callback/google` を登録する。
    - **取得する値**:
      - `CLIENT_ID`（Google OAuth Client ID）
      - `CLIENT_SECRET`（Google OAuth Client Secret）
@@ -263,7 +264,7 @@ APP_BASE_URL=https://your-worker-domain.example
 
 ### 7.1 ログイン画面
 - ヘッダーの「ログイン」から `/login` を表示する。
-- メールアドレスとパスワードの入力欄を表示するが、メール/パスワード認証は未実装とし、送信できない状態にする。
+- メールアドレスとパスワードの入力欄を表示するが、メール/パスワード認証は未実装とし、ボタンを無効にする。
 - **Google ログインボタン**:
   - `/login` 画面に配置し、Google OAuth のみ実際に利用できる。
   - Google 公式のボタンデザインまたは類似スタイルを使用。
