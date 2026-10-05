@@ -15,6 +15,7 @@ export function mapScenario(row: Row): Scenario {
     is_public: Number(row.is_public ?? 1),
     config_json: String(row.config_json),
     config: cfg,
+    last_run_at: row.last_run_at ? String(row.last_run_at) : null,
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
   };
@@ -44,7 +45,16 @@ export function mapRun(row: Row): SimulationRun {
 }
 
 export async function getScenarios(db: Client): Promise<Scenario[]> {
-  const result = await db.execute("SELECT * FROM scenarios ORDER BY created_at ASC");
+  const result = await db.execute(`
+    SELECT s.*, MAX(r.created_at) AS last_run_at
+    FROM scenarios s
+    LEFT JOIN simulation_runs r ON s.id = r.scenario_id
+    GROUP BY s.id
+    ORDER BY 
+      CASE WHEN MAX(r.created_at) IS NOT NULL THEN 0 ELSE 1 END,
+      MAX(r.created_at) DESC,
+      s.created_at DESC
+  `);
   return result.rows.map(mapScenario);
 }
 

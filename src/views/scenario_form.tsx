@@ -5,8 +5,8 @@ export function ScenarioFormView(props: {
   isEdit?: boolean;
 }) {
   let cfg: Partial<ScenarioConfig> = {
-    agentCount: 500,
-    maxTurns: 200,
+    agentCount: 200,
+    maxTurns: 500,
     initialWealth: 10000,
     wealthDistribution: "equal",
     waitRate: 0,
@@ -42,30 +42,44 @@ export function ScenarioFormView(props: {
     ? `/api/scenarios/${props.scenario.id}/update`
     : "/api/scenarios";
 
+  const disabledInputStyle = props.isEdit
+    ? "background: #f1f5f9; color: var(--text-muted); cursor: not-allowed;"
+    : "";
+
   return (
     <div style="max-width: 800px; margin: 0 auto;">
       <div style="margin-bottom: 24px;">
         <h1 style="font-size: 1.5rem; font-weight: 700;">
-          {props.isEdit ? "シナリオ編集" : "新規シナリオ作成"}
+          {props.isEdit ? "シナリオ基本情報編集" : props.scenario ? "シナリオ複製作成" : "新規シナリオ作成"}
         </h1>
         <p style="color: var(--text-muted); font-size: 0.9rem;">
-          シミュレーションの環境条件（人口・初期資産）を設定します。
+          {props.isEdit
+            ? "シナリオ名および説明文を編集します（環境設定やゼロサム取引設定は固定されています）。"
+            : props.scenario
+            ? "コピー元の設定を引き継いで新しいシナリオを作成します。環境設定やゼロサム取引パラメータを自由に変更できます。"
+            : "シミュレーションの環境条件（人口・初期資産・取引ルール）を設定します。"}
         </p>
       </div>
 
-      <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 20px;">
-        <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted);">プリセット自動入力:</span>
-        <button type="button" class="btn btn-secondary btn-sm" id="btn-preset-standard">🤝 標準モデル (500人 / ¥10,000)</button>
-        <button type="button" class="btn btn-secondary btn-sm" id="btn-preset-large">👥 大規模モデル (1,000人 / ¥10,000)</button>
-        <button type="button" class="btn btn-secondary btn-sm" id="btn-preset-quick">⚡ クイック検証モデル (100人 / ¥10,000)</button>
-      </div>
+      {props.isEdit && (
+        <div style="background: #f8fafc; border: 1px solid var(--border); border-left: 4px solid var(--primary); padding: 12px 16px; border-radius: 6px; margin-bottom: 20px; font-size: 0.88rem; color: var(--text-main); line-height: 1.5;">
+          ℹ️ <strong>設定変更の制限について:</strong> 過去のシミュレーション施行結果との整合性・再現性を担保するため、シナリオ作成後の環境設定（人口・初期資産・ターン数）やゼロサム取引ルールは変更できません。<br />
+          異なるパラメータで検証したい場合は、一覧画面から「<strong>📄 コピー</strong>」を行って新しいシナリオを作成してください。
+        </div>
+      )}
+
+      {props.scenario && !props.isEdit && (
+        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-left: 4px solid var(--primary); padding: 12px 16px; border-radius: 6px; margin-bottom: 20px; font-size: 0.88rem; color: var(--text-main); line-height: 1.5;">
+          📋 <strong>シナリオの複製作成:</strong> コピー元の環境設定やゼロサム取引パラメータを引き継ぎました。必要に応じて各設定値を自由に変更して保存してください。
+        </div>
+      )}
 
       <form method="post" action={actionUrl} id="scenario-form">
         <div class="sim-panel" style="margin-bottom: 20px;">
-          <h2>1. 基本情報</h2>
+          <h2>1. 基本情報（編集可能）</h2>
           <div class="form-group">
             <label class="form-label">シナリオ名 *</label>
-            <input type="text" name="title" class="form-control" defaultValue={props.scenario?.title || ""} placeholder="例: 純粋ヤードセールモデル（格差の凝縮検証）" required />
+            <input type="text" name="title" class="form-control" value={props.scenario?.title || ""} placeholder="例: 純粋ヤードセールモデル（格差の凝縮検証）" required />
           </div>
           <div class="form-group">
             <label class="form-label">シナリオ説明</label>
@@ -74,19 +88,108 @@ export function ScenarioFormView(props: {
         </div>
 
         <div class="sim-panel" style="margin-bottom: 20px;">
-          <h2>2. 環境設定（人口 & 初期資産）</h2>
+          <h2>2. 環境設定（人口 & 初期資産）{props.isEdit && <span style="font-size: 0.8rem; font-weight: normal; color: var(--text-muted); margin-left: 8px;">(変更不可)</span>}</h2>
           <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
             <div class="form-group">
               <label class="form-label">エージェント数 (人口)</label>
-              <input type="number" name="agentCount" class="form-control" defaultValue={cfg.agentCount || 500} min="50" max="5000" step="50" required />
+              <input
+                type="number"
+                name="agentCount"
+                class="form-control"
+                value={cfg.agentCount || 200}
+                min="10"
+                max="5000"
+                step="10"
+                disabled={props.isEdit}
+                style={disabledInputStyle}
+                required
+              />
             </div>
             <div class="form-group">
               <label class="form-label">初期資産 (円)</label>
-              <input type="number" name="initialWealth" class="form-control" defaultValue={cfg.initialWealth || 10000} step="1000" min="1000" required />
+              <input
+                type="number"
+                name="initialWealth"
+                class="form-control"
+                value={cfg.initialWealth || 10000}
+                step="1000"
+                min="1000"
+                disabled={props.isEdit}
+                style={disabledInputStyle}
+                required
+              />
             </div>
             <div class="form-group">
               <label class="form-label">最大ターン数</label>
-              <input type="number" name="maxTurns" class="form-control" defaultValue={cfg.maxTurns || 200} min="10" max="1000" step="10" required />
+              <input
+                type="number"
+                name="maxTurns"
+                class="form-control"
+                value={cfg.maxTurns || 500}
+                min="10"
+                max="1000"
+                step="10"
+                disabled={props.isEdit}
+                style={disabledInputStyle}
+                required
+              />
+            </div>
+          </div>
+        </div>
+
+        <div class="sim-panel" style="margin-bottom: 20px;">
+          <h2>3. ゼロサム取引・掛け金設定 (Yard-Sale Rule){props.isEdit && <span style="font-size: 0.8rem; font-weight: normal; color: var(--text-muted); margin-left: 8px;">(変更不可)</span>}</h2>
+          <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: -6px; margin-bottom: 16px;">
+            エージェント同士の1対1対戦で移動する金額（賭け金）の計算基準と割合です。
+          </p>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div class="form-group">
+              <label class="form-label">
+                掛け金比率 (betRatio): <strong id="bet-ratio-display">{Math.round((cfg.betRatio ?? 0.1) * 100)}%</strong>
+                <span style="font-size: 0.8rem; font-weight: normal; color: var(--text-muted); margin-left: 6px;">
+                  (小数: {cfg.betRatio ?? 0.1})
+                </span>
+              </label>
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <input
+                  type="number"
+                  name="betRatio"
+                  id="input-bet-ratio"
+                  class="form-control"
+                  value={Math.round((cfg.betRatio ?? 0.1) * 100)}
+                  min="1"
+                  max="100"
+                  step="1"
+                  disabled={props.isEdit}
+                  style={`width: 110px; ${disabledInputStyle}`}
+                  required
+                />
+                <span style="font-weight: 700; color: var(--text-main);">％</span>
+              </div>
+              {!props.isEdit && (
+                <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px;">
+                  <button type="button" class="btn btn-secondary btn-sm btn-quick-ratio" data-ratio="10">0.1 (10% 標準)</button>
+                  <button type="button" class="btn btn-secondary btn-sm btn-quick-ratio" data-ratio="20">0.2 (20% 加速)</button>
+                  <button type="button" class="btn btn-secondary btn-sm btn-quick-ratio" data-ratio="50">0.5 (50% 高速)</button>
+                  <button type="button" class="btn btn-secondary btn-sm btn-quick-ratio" data-ratio="100">1.0 (100% 全額勝負)</button>
+                </div>
+              )}
+              <small style="display: block; color: var(--text-muted); margin-top: 8px; font-size: 0.8rem; line-height: 1.4;">
+                💡 <strong>0.1（10%）</strong>: 緩やかに富が集約。<br />
+                💡 <strong>0.2（20%）</strong>: 短期間で格差が急激に拡大。<br />
+                💡 <strong>1.0（100%）</strong>: 敗者が1戦で全財産を失い即破産・脱落するトーナメント型。
+              </small>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">掛け金ルール (betRule)</label>
+              <select name="betRule" class="form-control" disabled={props.isEdit} style={disabledInputStyle}>
+                <option value="min_wealth" selected={(cfg.betRule || "min_wealth") === "min_wealth"}>min_wealth: 少ない方の資産基準 (ヤードセール標準・弱者基準)</option>
+                <option value="fixed_ratio" selected={cfg.betRule === "fixed_ratio"}>fixed_ratio: 敗者の資産基準 (勝敗により移動金額が非対称)</option>
+              </select>
+              <small style="display: block; color: var(--text-muted); margin-top: 8px; font-size: 0.8rem; line-height: 1.4;">
+                ※ <strong>min_wealth</strong> を選択すると、双方の資産のうち小さい方のX%（例: 1,000円 vs 10,000円なら1,000円の10%=100円）が掛け金となり、弱者の過剰な即死を防ぎます。
+              </small>
             </div>
           </div>
         </div>
@@ -124,31 +227,30 @@ export function ScenarioFormView(props: {
       <script
         dangerouslySetInnerHTML={{
           __html: `
-            document.getElementById('btn-preset-standard')?.addEventListener('click', () => {
-              const form = document.getElementById('scenario-form');
-              form.querySelector('input[name="title"]').value = '純粋ヤードセールモデル（標準500人）';
-              form.querySelector('textarea[name="description"]').value = '公平な初期条件から50%コイントス取引を繰り返し、数学的に富が1人へ凝縮していくヤードセール現象を検証する基本シナリオ。';
-              form.querySelector('input[name="agentCount"]').value = 500;
-              form.querySelector('input[name="initialWealth"]').value = 10000;
-              form.querySelector('input[name="maxTurns"]').value = 200;
-            });
+            const inputBetRatio = document.getElementById('input-bet-ratio');
+            const betRatioDisplay = document.getElementById('bet-ratio-display');
+            
+            function updateBetRatioDisplay(val) {
+              const num = Number(val) || 10;
+              if (betRatioDisplay) {
+                betRatioDisplay.textContent = num + '%';
+              }
+            }
 
-            document.getElementById('btn-preset-large')?.addEventListener('click', () => {
-              const form = document.getElementById('scenario-form');
-              form.querySelector('input[name="title"]').value = '大規模ヤードセールモデル（1,000人規模）';
-              form.querySelector('textarea[name="description"]').value = '1,000人のエージェントによる大規模取引市場で、オリガルヒ化（少数の超富裕層への富の集中）の進展速度を観察するシナリオ。';
-              form.querySelector('input[name="agentCount"]').value = 1000;
-              form.querySelector('input[name="initialWealth"]').value = 10000;
-              form.querySelector('input[name="maxTurns"]').value = 300;
-            });
+            if (inputBetRatio && !inputBetRatio.disabled) {
+              inputBetRatio.addEventListener('input', (e) => {
+                updateBetRatioDisplay(e.target.value);
+              });
+            }
 
-            document.getElementById('btn-preset-quick')?.addEventListener('click', () => {
-              const form = document.getElementById('scenario-form');
-              form.querySelector('input[name="title"]').value = 'クイック検証ヤードセールモデル（100人）';
-              form.querySelector('textarea[name="description"]').value = '100人のエージェントによる小規模市場で、短時間・低負荷にヤードセール動態の推移を確認できるシナリオ。';
-              form.querySelector('input[name="agentCount"]').value = 100;
-              form.querySelector('input[name="initialWealth"]').value = 10000;
-              form.querySelector('input[name="maxTurns"]').value = 150;
+            document.querySelectorAll('.btn-quick-ratio').forEach((btn) => {
+              btn.addEventListener('click', (e) => {
+                const ratio = e.target.getAttribute('data-ratio');
+                if (inputBetRatio && !inputBetRatio.disabled && ratio) {
+                  inputBetRatio.value = ratio;
+                  updateBetRatioDisplay(ratio);
+                }
+              });
             });
           `
         }}

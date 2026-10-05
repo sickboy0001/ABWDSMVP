@@ -40,6 +40,7 @@ export interface Scenario {
   is_public: number;
   config_json: string;
   config?: ScenarioConfig;
+  last_run_at?: string | null;
   created_at: string;
   updated_at: string;
 }

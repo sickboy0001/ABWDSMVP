@@ -20,7 +20,7 @@ import {
   getTurnLogs,
   getEventLogs,
 } from "./db";
-import type { ScenarioConfig, RunSummary, TurnLog, EventLog } from "./types";
+import type { Scenario, ScenarioConfig, RunSummary, TurnLog, EventLog } from "./types";
 import { Layout } from "./views/layout";
 import { ScenarioListView } from "./views/scenario_list";
 import { SimulatorView } from "./views/simulator_view";
@@ -207,10 +207,25 @@ app.get("/", async (c) => {
   );
 });
 
-app.get("/scenarios/new", (c) => {
+app.get("/scenarios/new", async (c) => {
+  const db = c.get("db");
+  const fromId = c.req.query("from") || c.req.query("copy_from");
+  let initialScenario: Scenario | undefined;
+
+  if (fromId) {
+    const source = await getScenario(db, fromId);
+    if (source) {
+      initialScenario = {
+        ...source,
+        title: `${source.title} (コピー)`,
+      };
+    }
+  }
+
+  const pageTitle = initialScenario ? `シナリオ複製: ${initialScenario.title}` : "新規シナリオ作成";
   return c.html(
-    <Layout user={c.get("user")} activeNav="new" title="新規シナリオ作成">
-      <ScenarioFormView />
+    <Layout user={c.get("user")} activeNav="new" title={pageTitle}>
+      <ScenarioFormView scenario={initialScenario} isEdit={false} />
     </Layout>
   );
 });
@@ -273,8 +288,8 @@ app.get("/runs/:id", async (c) => {
 // APIルート
 function parseScenarioConfig(body: Record<string, any>): ScenarioConfig {
   return {
-    agentCount: Number(body.agentCount) || 500,
-    maxTurns: Number(body.maxTurns) || 200,
+    agentCount: Number(body.agentCount) || 200,
+    maxTurns: Number(body.maxTurns) || 500,
     initialWealth: Number(body.initialWealth) || 10000,
     wealthDistribution: body.wealthDistribution === "unequal" ? "unequal" : "equal",
     waitRate: Number(body.waitRate) || 0,
@@ -287,8 +302,13 @@ function parseScenarioConfig(body: Record<string, any>): ScenarioConfig {
     strongAdvantage: body.strongAdvantage === "1" || body.strongAdvantage === "true",
     strongAdvantageTopPercent: 10,
     strongAdvantageBonus: 0.15,
-    betRule: "min_wealth",
-    betRatio: (Number(body.betRatio) || 10) / 100,
+    betRule: body.betRule === "fixed_ratio" ? "fixed_ratio" : "min_wealth",
+    betRatio: (() => {
+      const raw = Number(body.betRatio);
+      if (isNaN(raw) || raw <= 0) return 0.1;
+      const val = raw > 1 ? raw / 100 : raw;
+      return Math.max(0.01, Math.min(1.0, Math.round(val * 100) / 100));
+    })(),
     ubiEnabled: Number(body.ubiAmount) > 0,
     ubiAmount: Number(body.ubiAmount) || 0,
     progressiveTaxEnabled: Number(body.progressiveTaxRate) > 0,
@@ -327,33 +347,21 @@ app.post("/api/scenarios/:id/update", async (c) => {
   const title = String(body.title || "").trim();
   if (!title) return c.text("タイトルを入力してください", 400);
   const description = String(body.description || "").trim();
-  const config = parseScenarioConfig(body);
 
   const db = c.get("db");
+  const existing = await getScenario(db, id);
+  if (!existing) return c.notFound();
+
+  // シナリオ名・説明のみ更新し、環境設定や取引ルールなどの config は既存のものを維持
+  const config = existing.config || parseScenarioConfig(body);
+
   await updateScenario(db, id, { title, description, config });
   return c.redirect(`/scenarios/${id}/run`);
 });
 
 app.post("/api/scenarios/:id/copy", async (c) => {
-  const db = c.get("db");
-  const original = await getScenario(db, c.req.param("id"));
-  if (!original) return c.notFound();
-
-  const newId = "scen-" + crypto.randomUUID().slice(0, 8);
-  let config: ScenarioConfig = {} as ScenarioConfig;
-  try {
-    config = JSON.parse(original.config_json);
-  } catch (e) {}
-
-  await createScenario(db, {
-    id: newId,
-    user_id: c.get("user")?.id ?? null,
-    title: `${original.title} (コピー)`,
-    description: original.description,
-    config,
-  });
-
-  return c.redirect(`/scenarios/${newId}/edit`);
+  const id = c.req.param("id");
+  return c.redirect(`/scenarios/new?from=${id}`);
 });
 app.post("/api/runs", async (c) => {
   const data = await c.req.json<{

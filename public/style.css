@@ -121,9 +121,19 @@ a:hover { color: var(--primary-hover); text-decoration: underline; }
 
 .grid-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 20px;
   margin-top: 20px;
+}
+@media (max-width: 1024px) {
+  .grid-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .grid-cards {
+    grid-template-columns: 1fr;
+  }
 }
 .card {
   background: var(--bg-card);

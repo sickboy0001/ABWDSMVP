@@ -19,6 +19,7 @@ export function SimulatorView(props: {
             <span>状況: <strong id="sim-status" style="color: var(--primary);">⏹ 待機中</strong></span>
             <span>進行: Turn <strong id="kpi-turn">0</strong> / <span id="kpi-max-turn">{cfg.maxTurns || 200}</span></span>
             <span>ジニ係数: <strong id="kpi-header-gini" style="font-family: var(--font-mono); color: var(--primary);">0.000</strong></span>
+            <span>掛け金率: <strong>{Math.round((cfg.betRatio ?? 0.1) * 100)}%</strong> ({cfg.betRule || "min_wealth"})</span>
             <span>生存者: <strong id="kpi-header-survivors">{cfg.agentCount || 500}人</strong></span>
             <span>平均資産: <strong id="kpi-header-mean">¥{(cfg.initialWealth || 10000).toLocaleString()}</strong></span>
             <span>SEED: <input type="number" id="sim-seed" value={props.seed} style="width: 95px; background: #ffffff; border: 1px solid var(--border); color: var(--text-main); padding: 3px 8px; border-radius: 6px; font-family: var(--font-mono); font-size: 0.82rem;" />
@@ -98,7 +99,7 @@ export function SimulatorView(props: {
 
             <div class="speed-control">
               <span>速度:</span>
-              <input type="range" id="speed-slider" min="1" max="100" defaultValue="70" />
+              <input type="range" id="speed-slider" min="1" max="100" value="70" />
             </div>
           </div>
         {/* 標準では非表示の詳細情報ドロワー（設定パラメータ、リアルタイム指標、階層別資産シェア、イベントログ） */}
@@ -114,7 +115,8 @@ export function SimulatorView(props: {
                 <p><strong>エージェント数 (人口):</strong> {cfg.agentCount || 500} 人</p>
                 <p><strong>初期資産:</strong> ¥{(cfg.initialWealth || 10000).toLocaleString()}</p>
                 <p><strong>最大ターン数:</strong> {cfg.maxTurns || 200} ターン</p>
-                <p><strong>取引ルール:</strong> ヤードセール取引（50%コイントス）</p>
+                <p><strong>掛け金設定:</strong> 比率 <strong>{Math.round((cfg.betRatio ?? 0.1) * 100)}%</strong> (小数: {cfg.betRatio ?? 0.1}) / ルール: <code>{cfg.betRule || "min_wealth"}</code></p>
+                <p><strong>取引モデル:</strong> ヤードセール取引（50%コイントス）</p>
               </div>
               <div style="margin-top: 14px; padding: 10px; background: #f8fafc; border-radius: 6px; border: 1px dashed var(--border); font-size: 0.78rem; color: var(--text-muted);">
                 🚀 <strong>拡張予定:</strong> 「初期資産分布」「個性」、およびマクロ経済8要素（①労働〜⑧再分配）を順次追加予定

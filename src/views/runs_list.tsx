@@ -1,4 +1,5 @@
 import type { SimulationRun } from "../types";
+import { formatJstDateTime } from "./scenario_list";
 
 export function RunsListView(props: { runs: SimulationRun[] }) {
   return (
@@ -65,7 +66,7 @@ export function RunsListView(props: { runs: SimulationRun[] }) {
                       : "-"}
                   </td>
                   <td style="color: var(--text-dim); font-size: 0.8rem;">
-                    {new Date(r.created_at).toLocaleString("ja-JP")}
+                    {formatJstDateTime(r.created_at)}
                   </td>
                   <td>
                     <a href={`/runs/${r.id}`} class="btn btn-secondary btn-sm" style="margin-right: 6px;">
