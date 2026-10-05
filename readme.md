@@ -235,3 +235,4 @@ Cloudflare Dashboard > Workers & Pages > 対象Worker > Settings > Variables and
 
 ### hitory
 2026/10/04 initial deploy　https://abwdsmvp.syunjyu0001.workers.dev/
+2026/10/04 update flow etc 
