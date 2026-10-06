@@ -27,10 +27,18 @@ export function mapRun(row: Row): SimulationRun {
     if (row.summary_json) summary = JSON.parse(String(row.summary_json));
   } catch (e) {}
 
+  let scenario_config: ScenarioConfig | undefined;
+  try {
+    if (row.scenario_config_json) {
+      scenario_config = JSON.parse(String(row.scenario_config_json));
+    }
+  } catch (e) {}
+
   return {
     id: String(row.id),
     scenario_id: String(row.scenario_id),
     scenario_title: row.scenario_title ? String(row.scenario_title) : undefined,
+    scenario_config,
     user_id: row.user_id ? String(row.user_id) : null,
     seed_value: Number(row.seed_value),
     status: (row.status as any) || "completed",
@@ -89,9 +97,24 @@ export async function updateScenario(
   });
 }
 
+export async function getScenarioRunCount(db: Client, scenarioId: string): Promise<number> {
+  const result = await db.execute({
+    sql: "SELECT COUNT(*) AS count FROM simulation_runs WHERE scenario_id = ?",
+    args: [scenarioId],
+  });
+  return Number(result.rows[0]?.count ?? 0);
+}
+
+export async function deleteScenario(db: Client, id: string): Promise<void> {
+  await db.execute({
+    sql: "DELETE FROM scenarios WHERE id = ?",
+    args: [id],
+  });
+}
+
 export async function getRecentRuns(db: Client, limit = 10): Promise<SimulationRun[]> {
   const result = await db.execute({
-    sql: `SELECT r.*, s.title AS scenario_title
+    sql: `SELECT r.*, s.title AS scenario_title, s.config_json AS scenario_config_json
           FROM simulation_runs r
           LEFT JOIN scenarios s ON s.id = r.scenario_id
           ORDER BY r.created_at DESC LIMIT ?`,
@@ -102,7 +125,7 @@ export async function getRecentRuns(db: Client, limit = 10): Promise<SimulationR
 
 export async function getRun(db: Client, id: string): Promise<SimulationRun | null> {
   const result = await db.execute({
-    sql: `SELECT r.*, s.title AS scenario_title
+    sql: `SELECT r.*, s.title AS scenario_title, s.config_json AS scenario_config_json
           FROM simulation_runs r
           LEFT JOIN scenarios s ON s.id = r.scenario_id
           WHERE r.id = ?`,

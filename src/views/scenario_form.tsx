@@ -3,7 +3,11 @@ import type { Scenario, ScenarioConfig } from "../types";
 export function ScenarioFormView(props: {
   scenario?: Scenario;
   isEdit?: boolean;
+  runCount?: number;
 }) {
+  const runCount = props.runCount ?? 0;
+  const canDelete = Boolean(props.isEdit && props.scenario && runCount === 0);
+
   let cfg: Partial<ScenarioConfig> = {
     agentCount: 200,
     maxTurns: 500,
@@ -60,6 +64,44 @@ export function ScenarioFormView(props: {
             : "シミュレーションの環境条件（人口・初期資産・取引ルール）を設定します。"}
         </p>
       </div>
+
+      {canDelete && props.scenario && (
+        <>
+          <form
+            id="delete-scenario-form"
+            method="post"
+            action={`/api/scenarios/${props.scenario.id}/delete`}
+            style="display: none;"
+          />
+
+          <div
+            class="sim-panel"
+            style="margin-bottom: 20px; border: 1px solid #fecaca; background: #fffaf0;"
+          >
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+              <div style="flex: 1; min-width: 260px;">
+                <h2 style="color: #b91c1c; border-bottom: none; margin-bottom: 4px; padding-bottom: 0;">
+                  ⚠️ 危険な操作（シナリオの削除）
+                </h2>
+                <p style="font-size: 0.83rem; color: var(--text-muted); margin: 0; line-height: 1.5;">
+                  このシナリオにはシミュレーション施行履歴がないため削除できます。削除を実行するとデータは完全に削除され、復元できません。
+                </p>
+              </div>
+              <div>
+                <button
+                  type="button"
+                  id="btn-delete-scenario"
+                  class="btn btn-danger"
+                  style="padding: 9px 20px; font-weight: 600; white-space: nowrap;"
+                  data-title={props.scenario.title}
+                >
+                  🗑️ シナリオを削除
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {props.isEdit && (
         <div style="background: #f8fafc; border: 1px solid var(--border); border-left: 4px solid var(--primary); padding: 12px 16px; border-radius: 6px; margin-bottom: 20px; font-size: 0.88rem; color: var(--text-main); line-height: 1.5;">
@@ -252,6 +294,19 @@ export function ScenarioFormView(props: {
                 }
               });
             });
+
+            const btnDelete = document.getElementById('btn-delete-scenario');
+            if (btnDelete) {
+              btnDelete.addEventListener('click', () => {
+                const title = btnDelete.getAttribute('data-title') || 'このシナリオ';
+                if (confirm('シナリオ「' + title + '」を完全に削除してもよろしいですか？\\n\\n※この操作は取り消せません。')) {
+                  const deleteForm = document.getElementById('delete-scenario-form');
+                  if (deleteForm) {
+                    deleteForm.submit();
+                  }
+                }
+              });
+            }
           `
         }}
       />

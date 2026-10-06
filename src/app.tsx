@@ -15,6 +15,8 @@ import {
   getScenario,
   createScenario,
   updateScenario,
+  getScenarioRunCount,
+  deleteScenario,
   getRecentRuns,
   getRun,
   getTurnLogs,
@@ -27,6 +29,7 @@ import { SimulatorView } from "./views/simulator_view";
 import { ScenarioFormView } from "./views/scenario_form";
 import { RunsListView } from "./views/runs_list";
 import { RunReportView } from "./views/run_report";
+import { CompareView } from "./views/compare_view";
 
 type Bindings = {
   TURSO_DATABASE_URL: string;
@@ -232,11 +235,13 @@ app.get("/scenarios/new", async (c) => {
 
 app.get("/scenarios/:id/edit", async (c) => {
   const db = c.get("db");
-  const scenario = await getScenario(db, c.req.param("id"));
+  const id = c.req.param("id");
+  const scenario = await getScenario(db, id);
   if (!scenario) return c.notFound();
+  const runCount = await getScenarioRunCount(db, id);
   return c.html(
     <Layout user={c.get("user")} title={`シナリオ編集: ${scenario.title}`}>
-      <ScenarioFormView scenario={scenario} isEdit={true} />
+      <ScenarioFormView scenario={scenario} isEdit={true} runCount={runCount} />
     </Layout>
   );
 });
@@ -267,6 +272,29 @@ app.get("/runs", async (c) => {
   return c.html(
     <Layout user={c.get("user")} activeNav="runs" title="施行履歴一覧">
       <RunsListView runs={runs} />
+    </Layout>
+  );
+});
+
+app.get("/runs/compare", async (c) => {
+  const db = c.get("db");
+  const run1Id = c.req.query("run1");
+  const run2Id = c.req.query("run2");
+
+  if (!run1Id || !run2Id) {
+    return c.redirect("/runs");
+  }
+
+  const run1 = await getRun(db, run1Id);
+  const run2 = await getRun(db, run2Id);
+
+  if (!run1 || !run2) {
+    return c.notFound();
+  }
+
+  return c.html(
+    <Layout user={c.get("user")} title="シミュレーション施行比較 - ABWDS">
+      <CompareView run1={run1} run2={run2} />
     </Layout>
   );
 });
@@ -362,6 +390,21 @@ app.post("/api/scenarios/:id/update", async (c) => {
 app.post("/api/scenarios/:id/copy", async (c) => {
   const id = c.req.param("id");
   return c.redirect(`/scenarios/new?from=${id}`);
+});
+
+app.post("/api/scenarios/:id/delete", async (c) => {
+  const id = c.req.param("id");
+  const db = c.get("db");
+  const existing = await getScenario(db, id);
+  if (!existing) return c.notFound();
+
+  const runCount = await getScenarioRunCount(db, id);
+  if (runCount > 0) {
+    return c.text("シミュレーション施行履歴が存在するため、このシナリオは削除できません。", 400);
+  }
+
+  await deleteScenario(db, id);
+  return c.redirect("/");
 });
 app.post("/api/runs", async (c) => {
   const data = await c.req.json<{

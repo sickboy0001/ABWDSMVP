@@ -49,6 +49,7 @@ export interface SimulationRun {
   id: string;
   scenario_id: string;
   scenario_title?: string;
+  scenario_config?: ScenarioConfig;
   user_id: string | null;
   seed_value: number;
   status: "running" | "completed" | "aborted";
